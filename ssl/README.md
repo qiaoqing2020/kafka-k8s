@@ -28,7 +28,7 @@ Deploying and running the Community Version of Kafka packaged with the Confluent
 | Minikube | v1.29.0 |
 | Docker | v23.0.5 |
 | Kubernetes | v1.26.1 |
-| [cp-kafka](https://hub.docker.com/r/confluentinc/cp-kafka) | 7.5.0 |
+| [cp-kafka](https://hub.docker.com/r/confluentinc/cp-kafka) | latest |
 
 ## Namespace
 
@@ -55,38 +55,34 @@ docker run -it --rm \
 Once in the Docker container:
 
 ```bash
-keytool -keystore kafka-0.server.keystore.jks -alias kafka-0 -keyalg RSA -genkey
+keytool -keystore kafka-ssl-plain-0.server.keystore.jks -alias kafka-ssl-plain-0 -keyalg RSA -genkey
 ```
 
 Output:
 
 ```bash
-Enter keystore password:  
-Re-enter new password: 
+Enter keystore password: spirent123$ 
+Re-enter new password: spirent123$
 What is your first and last name?
-  [Unknown]:  kafka-0.kafka-headless.kafka.svc.cluster.local
+  [Unknown]:  kafka-ssl-plain-0.kafka-ssl-plain-headless.kafka.svc.cluster.local
 What is the name of your organizational unit?
-  [Unknown]:  test
+  [Unknown]:  cloudsure
 What is the name of your organization?
-  [Unknown]:  test
+  [Unknown]:  spirent
 What is the name of your City or Locality?
-  [Unknown]:  Liverpool
+  [Unknown]:  plano
 What is the name of your State or Province?
-  [Unknown]:  Merseyside
+  [Unknown]:  texas
 What is the two-letter country code for this unit?
-  [Unknown]:  UK
-Is CN=kafka-0.kafka-headless.kafka.svc.cluster.local, OU=test, O=test, L=Liverpool, ST=Merseyside, C=UK correct?
+  [Unknown]:  us
+Is CN=kafka-ssl-plain-0.kafka-ssl-plain-headless.kafka.svc.cluster.local, OU=clousure, O=spirent, L=plano, ST=texas, C=us correct?
   [no]:  yes
 ```
 
 Repeating the command for each broker:
 
 ```bash
-keytool -keystore kafka-1.server.keystore.jks -alias kafka-1 -keyalg RSA -genkey
-```
-
-```bash
-keytool -keystore kafka-2.server.keystore.jks -alias kafka-2 -keyalg RSA -genkey
+keytool -keystore kafka-ssl-plain-1.server.keystore.jks -alias kafka-ssl-plain-1 -keyalg RSA -genkey
 ```
 
 ### Create your own Certificate Authority (CA)
@@ -94,7 +90,7 @@ keytool -keystore kafka-2.server.keystore.jks -alias kafka-2 -keyalg RSA -genkey
 1. Generate a CA that is simply a public-private key pair and certificate, and it is intended to sign other certificates.
 
     ```bash
-    openssl req -new -x509 -keyout ca-key -out ca-cert -days 90
+    openssl req -new -x509 -keyout ca-key -out ca-cert -days 10000
     ```
 
     Output:
@@ -104,8 +100,8 @@ keytool -keystore kafka-2.server.keystore.jks -alias kafka-2 -keyalg RSA -genkey
     ...+++++
     ........+++++
     writing new private key to 'ca-key'
-    Enter PEM pass phrase:
-    Verifying - Enter PEM pass phrase:
+    Enter PEM pass phrase: spirent123$
+    Verifying - Enter PEM pass phrase: spirent123$
     -----
     You are about to be asked to enter information that will be incorporated
     into your certificate request.
@@ -114,27 +110,26 @@ keytool -keystore kafka-2.server.keystore.jks -alias kafka-2 -keyalg RSA -genkey
     For some fields there will be a default value,
     If you enter '.', the field will be left blank.
     -----
-    Country Name (2 letter code) [AU]:UK
-    State or Province Name (full name) [Some-State]:Merseyside
-    Locality Name (eg, city) []:Liverpool
-    Organization Name (eg, company) [Internet Widgits Pty Ltd]:test
-    Organizational Unit Name (eg, section) []:test
-    Common Name (e.g. server FQDN or YOUR name) []:*.kafka-headless.kafka.svc.cluster.local
+    Country Name (2 letter code) [AU]:us
+    State or Province Name (full name) [Some-State]:texas
+    Locality Name (eg, city) []:plano
+    Organization Name (eg, company) [Internet Widgits Pty Ltd]:spirent
+    Organizational Unit Name (eg, section) []:cloudsure
+    Common Name (e.g. server FQDN or YOUR name) []:*.kafka-ssl-plain-headless.kafka.svc.cluster.local
     Email Address []:
     ```
 
 2. Add the generated CA to the **clients’ truststore** so that the clients can trust this CA:
 
     ```bash
-    keytool -keystore kafka.client.truststore.jks -alias CARoot -importcert -file ca-cert
+    keytool -keystore kafka-ssl-plain.client.truststore.jks -alias CARoot -importcert -file ca-cert
     ```
 
 3. Add the generated CA to the **brokers’ truststore** so that the brokers can trust this CA.
 
     ```bash
-    keytool -keystore kafka-0.server.truststore.jks -alias CARoot -importcert -file ca-cert
-    keytool -keystore kafka-1.server.truststore.jks -alias CARoot -importcert -file ca-cert
-    keytool -keystore kafka-2.server.truststore.jks -alias CARoot -importcert -file ca-cert
+    keytool -keystore kafka-ssl-plain-0.server.truststore.jks -alias CARoot -importcert -file ca-cert
+    keytool -keystore kafka-ssl-plain-1.server.truststore.jks -alias CARoot -importcert -file ca-cert
     ```
 
 ### Sign the certificate
@@ -144,32 +139,27 @@ To sign all certificates in the keystore with the CA that you generated:
 1. Export the certificate from the keystore:
 
     ```bash
-    keytool -keystore kafka-0.server.keystore.jks -alias kafka-0 -certreq -file cert-file-kafka-0
-    keytool -keystore kafka-1.server.keystore.jks -alias kafka-1 -certreq -file cert-file-kafka-1
-    keytool -keystore kafka-2.server.keystore.jks -alias kafka-2 -certreq -file cert-file-kafka-2
+    keytool -keystore kafka-ssl-plain-0.server.keystore.jks -alias kafka-ssl-plain-0 -certreq -file cert-file-kafka-ssl-plain-0
+    keytool -keystore kafka-ssl-plain-1.server.keystore.jks -alias kafka-ssl-plain-1 -certreq -file cert-file-kafka-ssl-plain-1
     ```
 
 2. Sign it with the CA:
 
     ```bash
-    openssl x509 -req -CA ca-cert -CAkey ca-key -in cert-file-kafka-0 -out cert-signed-kafka-0 -days 90 -CAcreateserial -passin pass:${ca-password}
-    openssl x509 -req -CA ca-cert -CAkey ca-key -in cert-file-kafka-1 -out cert-signed-kafka-1 -days 90 -CAcreateserial -passin pass:${ca-password}
-    openssl x509 -req -CA ca-cert -CAkey ca-key -in cert-file-kafka-2 -out cert-signed-kafka-2 -days 90 -CAcreateserial -passin pass:${ca-password}
+    openssl x509 -req -CA ca-cert -CAkey ca-key -in cert-file-kafka-ssl-plain-0 -out cert-signed-kafka-ssl-plain-0 -days 10000 -CAcreateserial -passin pass:spirent123$
+    openssl x509 -req -CA ca-cert -CAkey ca-key -in cert-file-kafka-ssl-plain-1 -out cert-signed-kafka-ssl-plain-1 -days 10000 -CAcreateserial -passin pass:spirent123$
     ```
 
-    > :warning: Don't forget to substitute `${ca-password}`
 
 3. Import both the certificate of the CA and the signed certificate into the broker keystore:
 
     ```bash
-    keytool -keystore kafka-0.server.keystore.jks -alias CARoot -importcert -file ca-cert
-    keytool -keystore kafka-0.server.keystore.jks -alias kafka-0 -importcert -file cert-signed-kafka-0
+    keytool -keystore kafka-ssl-plain-0.server.keystore.jks -alias CARoot -importcert -file ca-cert
+    keytool -keystore kafka-ssl-plain-0.server.keystore.jks -alias kafka-ssl-plain-0 -importcert -file cert-signed-kafka-ssl-plain-0
     
-    keytool -keystore kafka-1.server.keystore.jks -alias CARoot -importcert -file ca-cert
-    keytool -keystore kafka-1.server.keystore.jks -alias kafka-1 -importcert -file cert-signed-kafka-1
-    
-    keytool -keystore kafka-2.server.keystore.jks -alias CARoot -importcert -file ca-cert
-    keytool -keystore kafka-2.server.keystore.jks -alias kafka-2 -importcert -file cert-signed-kafka-2
+    keytool -keystore kafka-ssl-plain-1.server.keystore.jks -alias CARoot -importcert -file ca-cert
+    keytool -keystore kafka-ssl-plain-1.server.keystore.jks -alias kafka-ssl-plain-1 -importcert -file cert-signed-kafka-ssl-plain-1
+
     ```
 
 > :warning: The `keystore` and `truststore` files will be used to create the [ConfigMap](https://kubernetes.io/docs/concepts/configuration/configmap/) for our deployment.
@@ -180,27 +170,30 @@ Create two ConfigMaps, one for the Kafka Broker and another one for our Kafka Cl
 
 - Kafka Broker
 
-  Create a local folder `kafka-ssl` and copy the `keystore` and `truststore` files into the folder. In addition, create a file `broker_creds` with the `${ca-password}`.
+  Create a local folder `kafka-ssl-plain` and copy the `keystore` and `truststore` files into the folder. In addition, create a file `broker_creds` with the `spirent123$`.
 
   Your folder should look similar to this:
 
   ```bash
-  ➜  kraft ls kafka-ssl   
-  broker_creds                  kafka-0.server.truststore.jks kafka-1.server.truststore.jks kafka-2.server.truststore.jks
-  kafka-0.server.keystore.jks   kafka-1.server.keystore.jks   kafka-2.server.keystore.jks
+  ➜  ls kafka-ssl-plain   
+  broker_creds                  
+  kafka-ssl-plain-0.server.truststore.jks 
+  kafka-ssl-plain-1.server.truststore.jks 
+  kafka-ssl-plain-0.server.keystore.jks   
+  kafka-ssl-plain-1.server.keystore.jks  
   ```
 
   Create the ConfigMap:
 
   ```bash
-  kubectl create configmap kafka-ssl --from-file kafka-ssl -n kafka
-  kubectl describe configmaps -n kafka kafka-ssl  
+  kubectl create configmap kafka-ssl-plain --from-file kafka-ssl-plain -n kafka
+  kubectl describe configmaps -n kafka kafka-ssl-plain  
   ```
 
   Output:
 
   ```bash
-  Name:         kafka-ssl
+  Name:         kafka-ssl-plain
   Namespace:    kafka
   Labels:       <none>
   Annotations:  <none>
@@ -209,50 +202,50 @@ Create two ConfigMaps, one for the Kafka Broker and another one for our Kafka Cl
   ====
   broker_creds:
   ----
-  <redacted>
+  spirent123$
   
   
   BinaryData
   ====
-  kafka-0.server.keystore.jks: 5001 bytes
-  kafka-0.server.truststore.jks: 1306 bytes
-  kafka-1.server.keystore.jks: 5001 bytes
-  kafka-1.server.truststore.jks: 1306 bytes
-  kafka-2.server.keystore.jks: 5001 bytes
-  kafka-2.server.truststore.jks: 1306 bytes
+  kafka-ssl-plain-0.server.keystore.jks: 5001 bytes
+  kafka-ssl-plain-0.server.truststore.jks: 1306 bytes
+  kafka-ssl-plain-1.server.keystore.jks: 5001 bytes
+  kafka-ssl-plain-1.server.truststore.jks: 1306 bytes
   
   Events:  <none>
   ```
 
 - Kafka Client
 
-  Create a local folder `kafka-client` and copy the `kafka.client.truststore.jks` file into the folder. In addition, create a file `broker_creds` with the `${ca-password}` and a file `client_security.properties`.
+  Create a local folder `kafka-ssl-plain-client` and copy the `kafka-ssl-plain.client.truststore.jks` file into the folder. In addition, create a file `broker_creds` with the `spirent123$` and a file `client_security.properties`.
 
   ```bash
   #client_security.properties
   security.protocol=SSL
-  ssl.truststore.location=/etc/kafka/secrets/kafka.client.truststore.jks
-  ssl.truststore.password=<redacted>
+  ssl.truststore.location=/etc/kafka/secrets/kafka-ssl-plain.client.truststore.jks
+  ssl.truststore.password=spirent123$
   ```
 
   Your folder should look similar to this:
 
   ```bash
-  ➜  kraft ls kafka-client 
-  broker_creds                client_security.properties  kafka.client.truststore.jks
+  ➜ ls kafka-ssl-plain-client 
+  broker_creds                
+  client_security.properties  
+  kafka-ssl-plain.client.truststore.jks
   ```
 
   Create the ConfigMap:
 
   ```bash
-  kubectl create configmap kafka-client --from-file kafka-client -n kafka
-  kubectl describe configmaps -n kafka kafka-client  
+  kubectl create configmap kafka-ssl-plain-client --from-file kafka-ssl-plain-client -n kafka
+  kubectl describe configmaps -n kafka kafka-ssl-plain-client  
   ```
 
   Output:
 
   ```bash
-  Name:         kafka-client
+  Name:         kafka-ssl-plain-client
   Namespace:    kafka
   Labels:       <none>
   Annotations:  <none>
@@ -261,45 +254,45 @@ Create two ConfigMaps, one for the Kafka Broker and another one for our Kafka Cl
   ====
   broker_creds:
   ----
-  <redacted>
+  spirent123$
   
   client_security.properties:
   ----
   security.protocol=SSL
-  ssl.truststore.location=/etc/kafka/secrets/kafka.client.truststore.jks
-  ssl.truststore.password=test1234
+  ssl.truststore.location=/etc/kafka/secrets/kafka-ssl-plain.client.truststore.jks
+  ssl.truststore.password=spirent123$
   ssl.endpoint.identification.algorithm=
   
   BinaryData
   ====
-  kafka.client.truststore.jks: 1306 bytes
+  kafka-ssl-plain.client.truststore.jks: 1306 bytes
   
   Events:  <none>
   ```
 
 ## Confluent Kafka
 
-This [yaml file](01-kafka.yaml) deploys a Kafka cluster within a Kubernetes namespace named `kafka`. It defines various Kubernetes resources required for setting up Kafka in a distributed manner.
+This [yaml file](01-kafka-ssl-plain.yaml) deploys a Kafka cluster within a Kubernetes namespace named `kafka`. It defines various Kubernetes resources required for setting up Kafka in a distributed manner.
 
 Here's a breakdown of what this file does:
 
 ### Service Account (kind: ServiceAccount)
 
-A [Service Account](https://kubernetes.io/docs/concepts/security/service-accounts/) named `kafka` is created in the `kafka` namespace. Service accounts are used to control permissions and access to resources within the cluster.
+A [Service Account](https://kubernetes.io/docs/concepts/security/service-accounts/) named `kafka-ssl-plain` is created in the `kafka` namespace. Service accounts are used to control permissions and access to resources within the cluster.
 
 ### Headless Service (kind: Service)
 
-A [headless Service](https://kubernetes.io/docs/concepts/services-networking/service/#headless-services) named `kafka-headless` is defined in the `kafka` namespace.
+A [headless Service](https://kubernetes.io/docs/concepts/services-networking/service/#headless-services) named `kafka-ssl-plain-headless` is defined in the `kafka` namespace.
 
 It exposes ports `9092` (for PLAINTEXT communication) and `9093` (for SSL traffic).
 
 ### StatefulSet (kind: StatefulSet)
 
-A [StatefulSet](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/) named `kafka` is configured in the `kafka` namespace with three replicas.
+A [StatefulSet](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/) named `kafka-ssl-plain` is configured in the `kafka` namespace with two replicas.
 
 It manages Kafka pods and ensures they have stable hostnames and storage.
 
-Each pod is associated with the headless service `kafka-headless` and the service account `kafka.` The pods use the Confluent Kafka Docker image (version 7.5.0). At the time of writing, this is the latest Confluent release.
+Each pod is associated with the headless service `kafka-ssl-plain-headless` and the service account `kafka-ssl-plain.` The pods use the Confluent Kafka Docker image (version latest).
 
 ### Deploy
 
@@ -307,7 +300,7 @@ You can deploy Kafka using the following commands:
 
 ```bash
 kubectl apply -f 00-namespace.yaml
-kubectl apply -f 01-kafka.yaml
+kubectl apply -f 01-kafka-ssl-plain.yaml
 ```
 
 Check if the Pods are `Running`:
@@ -320,9 +313,8 @@ Output:
 
 ```bash
 NAME      READY   STATUS    RESTARTS   AGE
-kafka-0   1/1     Running   0          61s
-kafka-1   1/1     Running   0          92s
-kafka-2   1/1     Running   0          2m33s
+kafka-ssl-plain-0   1/1     Running   0          61s
+kafka-ssl-plain-1   1/1     Running   0          92s
 ```
 
 ### Verify communication across brokers
@@ -332,13 +324,13 @@ There should now be three Kafka brokers each running on separate pods within you
 You can check the first pod's logs with the following command:
 
 ```bash
-kubectl logs kafka-0
+kubectl logs kafka-ssl-plain-0
 ```
 
 The name resolution of the three pods can take more time to work than it takes the pods to start, so you may see `UnknownHostException warnings`` in the pod logs initially:
 
 ```bash
-WARN [RaftManager nodeId=2] Error connecting to node kafka-1.kafka-headless.kafka.svc.cluster.local:29093 (id: 1 rack: null) (org.apache.kafka.clients.NetworkClient) java.net.UnknownHostException: kafka-1.kafka-headless.kafka.svc.cluster.local         ...
+WARN [RaftManager nodeId=2] Error connecting to node kafka-ssl-plain-1.kafka-ssl-plain-headless.kafka.svc.cluster.local:29093 (id: 1 rack: null) (org.apache.kafka-ssl-plain.clients.NetworkClient) java.net.UnknownHostException: kafka-ssl-plain-1.kafka-ssl-plain-headless.kafka.svc.cluster.local         ...
 ```
 
 But eventually each pod will successfully resolve pod hostnames and end with a message stating the broker has been unfenced:
@@ -352,7 +344,7 @@ INFO [Controller 0] Unfenced broker: UnfenceBrokerRecord(id=1, epoch=176) (org.a
 You can deploy Kafka Client using the following command:
 
 ```bash
-kubectl apply -f 02-kafka-client.yaml
+kubectl apply -f 02-kafka-ssl-plain-client.yaml
 ```
 
 Check if the Pod is `Running`:
@@ -365,20 +357,20 @@ Output:
 
 ```bash
 NAME        READY   STATUS    RESTARTS   AGE
-kafka-cli   1/1     Running   0          12m
+kafka-ssl-plain-client   1/1     Running   0          12m
 ```
 
-Connect to the pod `kafka-cli`:
+Connect to the pod `kafka-ssl-plain-client`:
 
 ```bash
-kubectl exec -it kafka-cli -- bash
+kubectl exec -it kafka-ssl-plain-client -- bash
 ```
 
-Create a topic named `test-ssl` with three partitions and a replication factor of 3.
+Create a topic named `test-ssl-plain` with three partitions and a replication factor of 3.
 
 ```bash
-kafka-topics --create --topic test-ssl --partitions 3 --replication-factor 3 --bootstrap-server ${BOOTSTRAP_SERVER} --command-config /etc/kafka/secrets/client_security.properties 
-Created topic test-ssl.
+kafka-topics --create --topic test-ssl-plain --partitions 2 --replication-factor 2 --bootstrap-server ${BOOTSTRAP_SERVER} --command-config /etc/kafka/secrets/client_security.properties 
+Created topic test-ssl-plain.
 ```
 
 :warning: The environment variable `BOOTSTRAP_SERVER` contains the list of the brokers, therefore, we save time in typing.
@@ -386,8 +378,8 @@ Created topic test-ssl.
 List all the topics in Kafka:
 
 ```bash
-kafka-topics --bootstrap-server kafka-0.kafka-headless.kafka.svc.cluster.local:9093 --list --command-config /etc/kafka/secrets/client_security.properties 
+kafka-topics --bootstrap-server kafka-ssl-plain-0.kafka-ssl-plain-headless.kafka.svc.cluster.local:9093 --list --command-config /etc/kafka/secrets/client_security.properties 
 test
-test-ssl
+test-ssl-plain
 test-test
 ```
