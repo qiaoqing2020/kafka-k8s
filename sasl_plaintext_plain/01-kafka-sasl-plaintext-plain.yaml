@@ -2,21 +2,21 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: kafka
+  name: kafka-sasl-plaintext-plain
   namespace: kafka
 ---
 apiVersion: v1
 kind: Service
 metadata:
   labels:
-    app: kafka
-  name: kafka-headless
+    app: kafka-sasl-plaintext-plain
+  name: kafka-sasl-plaintext-plain-headless
   namespace: kafka
 spec:
-  clusterIP: None
-  clusterIPs:
-  - None
-  internalTrafficPolicy: Cluster
+#  clusterIP: None
+#  clusterIPs:
+#  - None
+#  internalTrafficPolicy: Cluster
   ipFamilies:
   - IPv4
   ipFamilyPolicy: SingleStack
@@ -26,16 +26,16 @@ spec:
     protocol: TCP
     targetPort: tcp-kafka-int
   selector:
-    app: kafka
+    app: kafka-sasl-plaintext-plain
   sessionAffinity: None
-  type: ClusterIP
+  type: NodePort
 ---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   labels:
-    app: kafka
-  name: kafka
+    app: kafka-sasl-plaintext-plain
+  name: kafka-sasl-plaintext-plain
   namespace: kafka
 spec:
   podManagementPolicy: Parallel
@@ -43,21 +43,21 @@ spec:
   revisionHistoryLimit: 10
   selector:
     matchLabels:
-      app: kafka
-  serviceName: kafka-headless
+      app: kafka-sasl-plaintext-plain
+  serviceName: kafka-sasl-plaintext-plain-headless
   template:
     metadata:
       labels:
-        app: kafka
+        app: kafka-sasl-plaintext-plain
     spec:
-      serviceAccountName: kafka
+      serviceAccountName: kafka-sasl-plaintext-plain
       containers:
       - command:
         - sh
         - -exc
         - |
           export KAFKA_NODE_ID=${HOSTNAME##*-} && \
-          export KAFKA_ADVERTISED_LISTENERS=SASL://${POD_NAME}.kafka-headless.kafka.svc.cluster.local:9092
+          export KAFKA_ADVERTISED_LISTENERS=SASL://${POD_NAME}.${SERVICE_NAME}-headless.${NAMESPACE}.svc.cluster.local:9092
 
           exec /etc/confluent/docker/run
         env:
@@ -80,7 +80,7 @@ spec:
         - name: CLUSTER_ID
           value: "6PMpHYL9QkeyXRj9Nrp4KA"
         - name: KAFKA_CONTROLLER_QUORUM_VOTERS
-          value: "0@kafka-0.kafka-headless.kafka.svc.cluster.local:29093,1@kafka-1.kafka-headless.kafka.svc.cluster.local:29093,2@kafka-2.kafka-headless.kafka.svc.cluster.local:29093"
+          value: "0@kafka-sasl-plaintext-plain-0.kafka-sasl-plaintext-plain-headless.kafka.svc.cluster.local:29093,1@kafka-sasl-plaintext-plain-1.kafka-sasl-plaintext-plain-headless.kafka.svc.cluster.local:29093,2@kafka-sasl-plaintext-plain-2.kafka-sasl-plaintext-plain-headless.kafka.svc.cluster.local:29093"
         - name: KAFKA_PROCESS_ROLES
           value: "broker,controller"
         - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
@@ -95,13 +95,20 @@ spec:
           value: "CONTROLLER"
         - name: KAFKA_LISTENERS
           value: SASL://0.0.0.0:9092,CONTROLLER://0.0.0.0:29093
+        - name: SERVICE_NAME
+          value: "kafka-sasl-plaintext-plain"
         - name: POD_NAME
           valueFrom:
             fieldRef:
               apiVersion: v1
               fieldPath: metadata.name
-        name: kafka
-        image: docker.io/confluentinc/cp-kafka:7.5.0
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+        name: kafka-sasl-plaintext-plain
+        image: docker.io/confluentinc/cp-kafka:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
           failureThreshold: 6
@@ -152,9 +159,9 @@ spec:
         name: config
       - emptyDir: {}
         name: logs
-      - name: kafka-ssl
+      - name: kafka-sasl-plaintext-plain
         configMap: 
-          name: kafka-ssl
+          name: kafka-sasl-plaintext-plain
   updateStrategy:
     type: RollingUpdate
   volumeClaimTemplates:
@@ -168,7 +175,7 @@ spec:
       resources:
         requests:
           storage: 10Gi
-      storageClassName: standard
+      storageClassName: nfs-storage-class-cluster-default
       volumeMode: Filesystem
     status:
       phase: Pending

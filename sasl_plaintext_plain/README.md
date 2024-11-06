@@ -1,4 +1,4 @@
-# Kafka with SASL
+# Kafka with SASL_PLAINTEXT and PLAIN on OKD05
 
 - [Kafka with SASL](#kafka-with-sasl)
   - [Description](#description)
@@ -39,7 +39,7 @@ It isolates Kafka resources within a dedicated namespace for better organization
 
 We need to configure brokers and clients to use `SASL` authentication. Refer to [Kafka Broker and Controller Configurations for Confluent Platform](https://docs.confluent.io/platform/current/installation/configuration/broker-configs.html) page for detailed explanation of the configurations used here.
 
-### Broker
+### Broker (check only)
 
 1. Enable SASL/PLAIN mechanism in the `server.properties` file of every broker.
 
@@ -81,15 +81,15 @@ We need to configure brokers and clients to use `SASL` authentication. Refer to 
 1. Create a [ConfigMap](https://kubernetes.io/docs/concepts/configuration/configmap/) based on the `sasl_client.properties` file:
 
     ```bash
-    kubectl create configmap kafka-client --from-file sasl_client.properties -n kafka
-    kubectl describe configmaps -n kafka kafka-client 
+    kubectl create configmap kafka-sasl-plaintext-plain-client --from-file sasl_client.properties -n kafka
+    kubectl describe configmaps -n kafka kafka-sasl-plaintext-plain-client 
     ```
 
     Output:
 
     ```bash
-    configmap/kafka-client created
-    Name:         kafka-client
+    configmap/kafka-sasl-plaintext-plain-client created
+    Name:         kafka-sasl-plaintext-plain-client
     Namespace:    kafka
     Labels:       <none>
     Annotations:  <none>
@@ -110,19 +110,7 @@ We need to configure brokers and clients to use `SASL` authentication. Refer to 
     Events:  <none>
     ```
 
-2. Mount the ConfigMap as a `volume`:
 
-    ```yaml
-    ...
-    volumeMounts:
-        - mountPath: /etc/kafka/secrets/
-          name: kafka-client
-    ...
-    volumes:
-    - name: kafka-client
-      configMap: 
-        name: kafka-client
-    ```
 
 ## Confluent Kafka
 
@@ -132,21 +120,21 @@ Here's a breakdown of what this file does:
 
 ### Service Account (kind: ServiceAccount)
 
-A [Service Account](https://kubernetes.io/docs/concepts/security/service-accounts/) named `kafka` is created in the `kafka` namespace. Service accounts are used to control permissions and access to resources within the cluster.
+A [Service Account](https://kubernetes.io/docs/concepts/security/service-accounts/) named `kafka-sasl-plaintext-plain` is created in the `kafka` namespace. Service accounts are used to control permissions and access to resources within the cluster.
 
 ### Headless Service (kind: Service)
 
-A [headless Service](https://kubernetes.io/docs/concepts/services-networking/service/#headless-services) named `kafka-headless` is defined in the `kafka` namespace.
+A [headless Service](https://kubernetes.io/docs/concepts/services-networking/service/#headless-services) named `kafka-sasl-plaintext-plain-headless` is defined in the `kafka` namespace.
 
 It exposes ports `9092` (for SASL_PLAINTEXT communication).
 
 ### StatefulSet (kind: StatefulSet)
 
-A [StatefulSet](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/) named `kafka` is configured in the `kafka` namespace with three replicas.
+A [StatefulSet](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/) named `kafka-sasl-plaintext-plain` is configured in the `kafka` namespace with three replicas.
 
 It manages Kafka pods and ensures they have stable hostnames and storage.
 
-Each pod is associated with the headless service `kafka-headless` and the service account `kafka.` The pods use the Confluent Kafka Docker image (version 7.5.0). At the time of writing, this is the latest Confluent release.
+Each pod is associated with the headless service `kafka-sasl-plaintext-plain-headless` and the service account `kafka-sasl-plaintext-plain.`
 
 ### Deploy
 
@@ -154,7 +142,7 @@ You can deploy Kafka using the following commands:
 
 ```bash
 kubectl apply -f 00-namespace.yaml
-kubectl apply -f 01-kafka.yaml
+kubectl apply -f 01-kafka-sasl-plaintext-plain.yaml -n kafka
 ```
 
 Check if the Pods are `Running`:
@@ -167,9 +155,9 @@ Output:
 
 ```bash
 NAME      READY   STATUS    RESTARTS   AGE
-kafka-0   1/1     Running   0          61s
-kafka-1   1/1     Running   0          92s
-kafka-2   1/1     Running   0          2m33s
+kafka-sasl-plaintext-plain-0   1/1     Running   0          61s
+kafka-sasl-plaintext-plain-1   1/1     Running   0          92s
+kafka-sasl-plaintext-plain-2   1/1     Running   0          2m33s
 ```
 
 ### Verify communication across brokers
@@ -179,13 +167,13 @@ There should now be three Kafka brokers each running on separate pods within you
 You can check the first pod's logs with the following command:
 
 ```bash
-kubectl logs kafka-0
+kubectl logs kafka-sasl-plaintext-plain-0
 ```
 
 The name resolution of the three pods can take more time to work than it takes the pods to start, so you may see `UnknownHostException warnings`` in the pod logs initially:
 
 ```bash
-WARN [RaftManager nodeId=2] Error connecting to node kafka-1.kafka-headless.kafka.svc.cluster.local:29093 (id: 1 rack: null) (org.apache.kafka.clients.NetworkClient) java.net.UnknownHostException: kafka-1.kafka-headless.kafka.svc.cluster.local         ...
+WARN [RaftManager nodeId=2] Error connecting to node kafka-sasl-plaintext-plain-1.kafka-sasl-plaintext-plain-headless.kafka.svc.cluster.local:29093 (id: 1 rack: null) (org.apache.kafka.clients.NetworkClient) java.net.UnknownHostException: kafka-sasl-plaintext-plain-1.kafka-sasl-plaintext-plain-headless.kafka.svc.cluster.local         ...
 ```
 
 But eventually each pod will successfully resolve pod hostnames and end with a message stating the broker has been unfenced:
@@ -199,33 +187,33 @@ INFO [Controller 0] Unfenced broker: UnfenceBrokerRecord(id=1, epoch=176) (org.a
 You can deploy Kafka Client using the following command:
 
 ```bash
-kubectl apply -f 02-kafka-client.yaml
+kubectl apply -f 02-kafka-sasl-plaintext-plain-client.yaml -n kafka
 ```
 
 Check if the Pod is `Running`:
 
 ```bash
-kubectl get pods 
+kubectl get pods -n kafka 
 ```
 
 Output:
 
 ```bash
 NAME        READY   STATUS    RESTARTS   AGE
-kafka-cli   1/1     Running   0          12m
+kafka-sasl-plaintext-plain-client   1/1     Running   0          12m
 ```
 
-Connect to the pod `kafka-cli`:
+Connect to the pod `kafka-sasl-plaintext-plain-client`:
 
 ```bash
-kubectl exec -it kafka-cli -- bash
+kubectl exec -it kafka-sasl-plaintext-plain-client -n kafka -- bash
 ```
 
 Create a topic named `test-sasl` with three partitions and a replication factor of 3.
 
 ```bash
-kafka-topics --create --topic test-sasl --partitions 3 --replication-factor 3 --bootstrap-server ${BOOTSTRAP_SERVER} --command-config /etc/kafka/secrets/sasl_client.properties 
-Created topic test-sasl.
+kafka-topics --create --topic test-sasl-plaintext-plain --partitions 3 --replication-factor 3 --bootstrap-server ${BOOTSTRAP_SERVER} --command-config /etc/kafka/secrets/sasl_client.properties 
+Created topic test-sasl-plaintext-plain.
 ```
 
 :warning: The environment variable `BOOTSTRAP_SERVER` contains the list of the brokers, therefore, we save time in typing.
@@ -234,8 +222,5 @@ List all the topics in Kafka:
 
 ```bash
 kafka-topics --bootstrap-server ${BOOTSTRAP_SERVER} -list --command-config /etc/kafka/secrets/sasl_client.properties 
-test
-test-sasl
-test-ssl
-test-test
+test-sasl-plaintext-plain
 ```
