@@ -2,21 +2,17 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: kafka
+  name: kafka-ssl-plain
   namespace: kafka
 ---
 apiVersion: v1
 kind: Service
 metadata:
   labels:
-    app: kafka
-  name: kafka-headless
+    app: kafka-ssl-plain
+  name: kafka-ssl-plain-headless
   namespace: kafka
 spec:
-  clusterIP: None
-  clusterIPs:
-  - None
-  internalTrafficPolicy: Cluster
   ipFamilies:
   - IPv4
   ipFamilyPolicy: SingleStack
@@ -30,38 +26,38 @@ spec:
     protocol: TCP
     targetPort: tcp-kafka-ssl
   selector:
-    app: kafka
+    app: kafka-ssl-plain
   sessionAffinity: None
-  type: ClusterIP
+  type: NodePort
 ---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   labels:
-    app: kafka
-  name: kafka
+    app: kafka-ssl-plain
+  name: kafka-ssl-plain
   namespace: kafka
 spec:
   podManagementPolicy: Parallel
-  replicas: 3
+  replicas: 2
   revisionHistoryLimit: 10
   selector:
     matchLabels:
-      app: kafka
-  serviceName: kafka-headless
+      app: kafka-ssl-plain
+  serviceName: kafka-ssl-plain-headless
   template:
     metadata:
       labels:
-        app: kafka
+        app: kafka-ssl-plain
     spec:
-      serviceAccountName: kafka
+      serviceAccountName: kafka-ssl-plain
       containers:
       - command:
         - sh
         - -exc
         - |
           export KAFKA_NODE_ID=${HOSTNAME##*-} && \
-          export KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://${POD_NAME}.kafka-headless.kafka.svc.cluster.local:9092,SSL://${POD_NAME}.kafka-headless.kafka.svc.cluster.local:9093
+          export KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://${POD_NAME}.${SERVICE_NAME}-headless.${NAMESPACE}.svc.cluster.local:9092,SSL://${POD_NAME}.${SERVICE_NAME}-headless.${NAMESPACE}.svc.cluster.local:9093
           export KAFKA_SSL_TRUSTSTORE_FILENAME=${POD_NAME}.server.truststore.jks
           export KAFKA_SSL_KEYSTORE_FILENAME=${POD_NAME}.server.keystore.jks
           export KAFKA_OPTS="-Djavax.net.debug=all"
@@ -79,28 +75,35 @@ spec:
         - name: CLUSTER_ID
           value: "6PMpHYL9QkeyXRj9Nrp4KA"
         - name: KAFKA_CONTROLLER_QUORUM_VOTERS
-          value: "0@kafka-0.kafka-headless.kafka.svc.cluster.local:29093,1@kafka-1.kafka-headless.kafka.svc.cluster.local:29093,2@kafka-2.kafka-headless.kafka.svc.cluster.local:29093"
+          value: "0@kafka-ssl-plain-0.kafka-ssl-plain-headless.kafka.svc.cluster.local:29093,1@kafka-ssl-plain-1.kafka-ssl-plain-headless.kafka.svc.cluster.local:29093"
         - name: KAFKA_PROCESS_ROLES
           value: "broker,controller"
         - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
-          value: "3"
+          value: "2"
         - name: KAFKA_NUM_PARTITIONS
-          value: "3"
+          value: "2"
         - name: KAFKA_DEFAULT_REPLICATION_FACTOR
-          value: "3"
+          value: "2"
         - name: KAFKA_MIN_INSYNC_REPLICAS
           value: "2"
         - name: KAFKA_CONTROLLER_LISTENER_NAMES
           value: "CONTROLLER"
         - name: KAFKA_LISTENERS
           value: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:29093,SSL://0.0.0.0:9093
+        - name: SERVICE_NAME
+          value: "kafka-ssl-plain"
         - name: POD_NAME
           valueFrom:
             fieldRef:
               apiVersion: v1
               fieldPath: metadata.name
-        name: kafka
-        image: docker.io/confluentinc/cp-kafka:7.5.0
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+        name: kafka-ssl-plain
+        image: docker.io/confluentinc/cp-kafka:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
           failureThreshold: 6
@@ -138,7 +141,7 @@ spec:
         terminationMessagePolicy: File
         volumeMounts:
         - mountPath: /etc/kafka/secrets/
-          name: kafka-ssl
+          name: kafka-ssl-plain
         - mountPath: /etc/kafka
           name: config
         - mountPath: /var/lib/kafka/data
@@ -156,9 +159,9 @@ spec:
         name: config
       - emptyDir: {}
         name: logs
-      - name: kafka-ssl
+      - name: kafka-ssl-plain
         configMap: 
-          name: kafka-ssl
+          name: kafka-ssl-plain
   updateStrategy:
     type: RollingUpdate
   volumeClaimTemplates:
@@ -172,7 +175,7 @@ spec:
       resources:
         requests:
           storage: 10Gi
-      storageClassName: standard
+      storageClassName: nfs-storage-class-cluster-default
       volumeMode: Filesystem
     status:
       phase: Pending
