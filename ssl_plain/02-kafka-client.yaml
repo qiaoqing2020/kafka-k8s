@@ -1,0 +1,42 @@
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kafka-ssl-plain-client
+  namespace: kafka
+  labels:
+    app: kafka-ssl-plain-client
+spec:
+  containers:
+  - name: kafka-ssl-plain-client
+    command:
+    - sh
+    - -c
+    - "trap : TERM INT; sleep infinity & wait"
+    env:
+    - name: BOOTSTRAP_SERVER
+      value: kafka-ssl-plain-0.kafka-ssl-plain-headless.kafka.svc.cluster.local:9093,kafka-ssl-plain-1.kafka-ssl-plain-headless.kafka.svc.cluster.local:9093
+    image: docker.io/confluentinc/cp-kafka:latest
+    imagePullPolicy: IfNotPresent
+    resources:
+      limits:
+        cpu: 100m
+        memory: 200Mi
+      requests:
+        cpu: 100m
+        memory: 200Mi
+    terminationMessagePath: /dev/termination-log
+    terminationMessagePolicy: File
+    volumeMounts:
+        - mountPath: /etc/kafka/secrets/
+          name: kafka-ssl-plain-client
+  dnsPolicy: ClusterFirst
+  enableServiceLinks: true
+  restartPolicy: Always
+  securityContext: {}
+  serviceAccountName: kafka-ssl-plain
+  terminationGracePeriodSeconds: 30
+  volumes:
+  - name: kafka-ssl-plain-client
+    configMap: 
+      name: kafka-ssl-plain-client
